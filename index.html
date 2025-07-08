@@ -1146,7 +1146,6 @@
                 await loadAllBucketContents(true);
                 lastSyncTime = new Date();
                 setSyncStatus('success');
-                showMessage('Sincronização concluída com sucesso!', 'success');
             } catch (err) {
                 console.error("Erro na sincronização:", err);
                 setSyncStatus('error');
@@ -1220,27 +1219,7 @@
                     loadingContainer.style.display = 'none';
                 }
                 
-                // Verificar se houve mudanças
-                if (isSync && (previousSize !== bucketTotalSize || previousFiles !== bucketTotalFiles)) {
-                    const sizeDiff = bucketTotalSize - previousSize;
-                    const filesDiff = bucketTotalFiles - previousFiles;
-                    
-                    let changeMessage = 'Bucket atualizado: ';
-                    if (filesDiff > 0) {
-                        changeMessage += `+${filesDiff} arquivos `;
-                    } else if (filesDiff < 0) {
-                        changeMessage += `${filesDiff} arquivos `;
-                    }
-                    
-                    if (sizeDiff !== 0) {
-                        const sizeChange = sizeDiff > 0 ? `+${formatBytes(sizeDiff)}` : `-${formatBytes(Math.abs(sizeDiff))}`;
-                        changeMessage += `(${sizeChange})`;
-                    }
-                    
-                    if (filesDiff !== 0 || sizeDiff !== 0) {
-                        showMessage(changeMessage, 'info');
-                    }
-                }
+                
                 
                 updateBucketSizeInfo();
                 
