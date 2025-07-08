@@ -126,13 +126,16 @@
             border: 1px solid #3a3d44;
         }
 
-        .select-all-btn, .clear-selection-btn, .download-selected-btn {
+        .select-all-btn, .clear-selection-btn, .download-selected-btn, .sync-btn {
             padding: 8px 15px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
             transition: all 0.3s ease;
+        }
+        .sync-btn{
+            display: none;
         }
 
         .select-all-btn {
@@ -160,6 +163,20 @@
 
         .download-selected-btn:hover {
             background: #e67e22;
+        }
+
+        .sync-btn {
+            background: #54838b;
+            color: white;
+        }
+
+        .sync-btn:hover {
+            background: #416a81;
+        }
+
+        .sync-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
         }
 
         .selection-info {
@@ -409,6 +426,48 @@
             font-size: 14px;
         }
 
+        .bucket-size-info {
+            color: #a0a3a8;
+            font-size: 14px;
+            margin-left: 20px;
+            padding: 8px 12px;
+            background: #1a1d23;
+            border-radius: 4px;
+            border: 1px solid #3a3d44;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sync-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .sync-indicator.syncing {
+            background: #ffc107;
+            animation: spin 1s linear infinite;
+        }
+
+        .sync-indicator.error {
+            background: #dc3545;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .empty-state {
             text-align: center;
             padding: 50px;
@@ -479,6 +538,7 @@
                 <button class="select-all-btn" onclick="selectAll()">✓ Selecionar Todos</button>
                 <button class="clear-selection-btn" onclick="clearSelection()">✗ Limpar Seleção</button>
                 <button class="download-selected-btn" onclick="downloadSelected()">📦 Baixar ZIP Selecionados</button>
+                <button class="sync-btn" id="syncBtn" onclick="syncBucketData()">🔄 Sincronizar</button>
                 <div class="selection-info" id="selectionInfo">0 itens selecionados</div>
             </div>
 
@@ -512,6 +572,10 @@
                     <option value="400">400</option>
                     <option value="500">500</option>
                 </select>
+                <div class="bucket-size-info" id="bucketSizeInfo">
+                    <div class="sync-indicator" id="syncIndicator"></div>
+                    <span id="bucketSizeText">Calculando tamanho do bucket...</span>
+                </div>
             </div>
 
             <div id="contentContainer"></div>
@@ -550,6 +614,11 @@
         let itemsPerPage = 50;
         let isSearching = false;
         let searchTimeout;
+        let bucketTotalSize = 0;
+        let bucketTotalFiles = 0;
+        let syncInterval;
+        let lastSyncTime = null;
+        let isSyncing = false;
 
         const contentContainer = document.getElementById('contentContainer');
         const loadingContainer = document.getElementById('loadingContainer');
@@ -564,6 +633,10 @@
         const progressText = document.getElementById('progressText');
         const progressFill = document.getElementById('progressFill');
         const progressDetails = document.getElementById('progressDetails');
+        const bucketSizeInfo = document.getElementById('bucketSizeInfo');
+        const bucketSizeText = document.getElementById('bucketSizeText');
+        const syncIndicator = document.getElementById('syncIndicator');
+        const syncBtn = document.getElementById('syncBtn');
 
         function showMessage(message, type = 'info') {
             messageContainer.innerHTML = `<div class="${type}-message">${message}</div>`;
@@ -579,6 +652,30 @@
             const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function updateBucketSizeInfo() {
+            const lastSync = lastSyncTime ? ` | Última sync: ${lastSyncTime.toLocaleTimeString()}` : '';
+            bucketSizeText.textContent = `Tamanho total: ${formatBytes(bucketTotalSize)} | ${bucketTotalFiles} arquivos${lastSync}`;
+        }
+
+        function setSyncStatus(status) {
+            syncIndicator.className = 'sync-indicator';
+            syncBtn.disabled = false;
+            
+            switch(status) {
+                case 'syncing':
+                    syncIndicator.classList.add('syncing');
+                    syncBtn.disabled = true;
+                    break;
+                case 'error':
+                    syncIndicator.classList.add('error');
+                    break;
+                case 'success':
+                default:
+                    // Classe padrão já aplicada
+                    break;
+            }
         }
 
         function updateSelectionInfo() {
@@ -806,8 +903,7 @@
                         showProgress(false);
                         return;
                     }
-
-                    updateProgress(0, totalFiles);
+                                        updateProgress(0, totalFiles);
 
                     for (let i = 0; i < folderContents.length; i++) {
                         const file = folderContents[i];
@@ -1040,10 +1136,39 @@
             displayContents(filteredContents);
         }
 
-        async function loadAllBucketContents() {
-            loadingContainer.style.display = 'block';
-            contentContainer.innerHTML = '';
+        async function syncBucketData() {
+            if (isSyncing) return;
+            
+            isSyncing = true;
+            setSyncStatus('syncing');
+            
+            try {
+                await loadAllBucketContents(true);
+                lastSyncTime = new Date();
+                setSyncStatus('success');
+                showMessage('Sincronização concluída com sucesso!', 'success');
+            } catch (err) {
+                console.error("Erro na sincronização:", err);
+                setSyncStatus('error');
+                showMessage(`Erro na sincronização: ${err.message}`, 'error');
+            } finally {
+                isSyncing = false;
+                updateBucketSizeInfo();
+            }
+        }
+
+        async function loadAllBucketContents(isSync = false) {
+            if (!isSync) {
+                loadingContainer.style.display = 'block';
+                contentContainer.innerHTML = '';
+            }
+            
+            const previousSize = bucketTotalSize;
+            const previousFiles = bucketTotalFiles;
+            
             allBucketContents = [];
+            bucketTotalSize = 0;
+            bucketTotalFiles = 0;
 
             try {
                 let continuationToken = null;
@@ -1068,6 +1193,8 @@
                                     lastModified: new Date(content.LastModified),
                                     displayName: content.Key.split('/').pop()
                                 });
+                                bucketTotalSize += content.Size;
+                                bucketTotalFiles++;
                             } else {
                                 allBucketContents.push({
                                     name: content.Key,
@@ -1083,22 +1210,53 @@
                     totalLoaded += data.Contents ? data.Contents.length : 0;
                     continuationToken = data.NextContinuationToken;
 
-                    loadingContainer.innerHTML = `<p>Carregando conteúdo do bucket... (${totalLoaded} itens carregados)</p>`;
+                    if (!isSync) {
+                        loadingContainer.innerHTML = `<p>Carregando conteúdo do bucket... (${totalLoaded} itens carregados)</p>`;
+                    }
 
                 } while (continuationToken);
 
-                loadingContainer.style.display = 'none';
+                if (!isSync) {
+                    loadingContainer.style.display = 'none';
+                }
+                
+                // Verificar se houve mudanças
+                if (isSync && (previousSize !== bucketTotalSize || previousFiles !== bucketTotalFiles)) {
+                    const sizeDiff = bucketTotalSize - previousSize;
+                    const filesDiff = bucketTotalFiles - previousFiles;
+                    
+                    let changeMessage = 'Bucket atualizado: ';
+                    if (filesDiff > 0) {
+                        changeMessage += `+${filesDiff} arquivos `;
+                    } else if (filesDiff < 0) {
+                        changeMessage += `${filesDiff} arquivos `;
+                    }
+                    
+                    if (sizeDiff !== 0) {
+                        const sizeChange = sizeDiff > 0 ? `+${formatBytes(sizeDiff)}` : `-${formatBytes(Math.abs(sizeDiff))}`;
+                        changeMessage += `(${sizeChange})`;
+                    }
+                    
+                    if (filesDiff !== 0 || sizeDiff !== 0) {
+                        showMessage(changeMessage, 'info');
+                    }
+                }
+                
+                updateBucketSizeInfo();
                 
                 if (isSearching) {
                     performSearch();
-                } else {
+                } else if (!isSync) {
                     loadBucketContents();
                 }
 
             } catch (err) {
                 console.error("Erro ao listar conteúdo do bucket:", err);
                 showMessage(`Erro ao carregar conteúdo do bucket: ${err.message}`, 'error');
-                loadingContainer.style.display = 'none';
+                if (!isSync) {
+                    loadingContainer.style.display = 'none';
+                }
+                throw err;
             }
         }
 
@@ -1238,10 +1396,29 @@
                 return;
             }
 
+            // Filtrar com lógica melhorada
             filteredContents = allBucketContents.filter(item => {
                 const itemName = item.name.toLowerCase();
                 const displayName = item.displayName ? item.displayName.toLowerCase() : '';
-                return itemName.includes(searchTerm) || displayName.includes(searchTerm);
+                
+                if (item.type === 'folder') {
+                    // Para pastas, verificar apenas se o nome da pasta corresponde
+                    const folderParts = item.name.split('/').filter(p => p !== '');
+                    const lastFolderName = folderParts[folderParts.length - 1];
+                    return lastFolderName && lastFolderName.toLowerCase().includes(searchTerm);
+                } else {
+                    // Para arquivos, verificar se é uma correspondência exata do nome completo
+                    // ou se o displayName (nome do arquivo) corresponde
+                    const fileName = item.name.split('/').pop().toLowerCase();
+                    
+                    // Se o termo de pesquisa contém '/', procurar pelo caminho completo
+                    if (searchTerm.includes('/')) {
+                        return itemName.includes(searchTerm);
+                    } else {
+                        // Caso contrário, procurar apenas pelo nome do arquivo
+                        return fileName.includes(searchTerm);
+                    }
+                }
             });
 
             currentPage = 1;
@@ -1261,6 +1438,22 @@
             }, 300);
         }
 
+        function startAutoSync() {
+            // Sincronizar automaticamente a cada 5 minutos
+            syncInterval = setInterval(() => {
+                if (!isSyncing) {
+                    syncBucketData();
+                }
+            }, 300000); // 5 minutos
+        }
+
+        function stopAutoSync() {
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+        }
+
         // Event listeners
         searchInput.addEventListener('input', debounceSearch);
 
@@ -1277,11 +1470,136 @@
             displayContents(filteredContents);
         });
 
+        // Detectar F5 ou Ctrl+R para sincronizar
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                e.preventDefault(); // Prevenir o reload padrão
+                if (!isSyncing) {
+                    syncBucketData().then(() => {
+                        // Após sincronizar, recarregar a visualização atual
+                        if (isSearching) {
+                            performSearch();
+                        } else {
+                            loadBucketContents();
+                        }
+                    });
+                }
+            }
+        });
+
+        // Detectar quando a página fica visível/invisível para pausar/retomar sync
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoSync();
+            } else {
+                startAutoSync();
+                // Sincronizar imediatamente quando a página volta a ficar visível
+                if (!isSyncing) {
+                    syncBucketData();
+                }
+            }
+        });
+
+        // Detectar quando a janela perde/ganha foco
+        window.addEventListener('focus', function() {
+            if (!isSyncing) {
+                syncBucketData();
+            }
+        });
+
+        // Detectar atualização da página (beforeunload/load)
+        window.addEventListener('beforeunload', function() {
+            stopAutoSync();
+            // Salvar estado atual no localStorage para restaurar após reload
+            localStorage.setItem('bucketAppState', JSON.stringify({
+                currentPath: currentPath,
+                searchTerm: searchInput.value,
+                isSearching: isSearching,
+                itemsPerPage: itemsPerPage,
+                currentPage: currentPage
+            }));
+        });
+
+        // Restaurar estado após reload e sincronizar
+        window.addEventListener('load', function() {
+            const savedState = localStorage.getItem('bucketAppState');
+            if (savedState) {
+                try {
+                    const state = JSON.parse(savedState);
+                    currentPath = state.currentPath || '';
+                    searchInput.value = state.searchTerm || '';
+                    isSearching = state.isSearching || false;
+                    itemsPerPage = state.itemsPerPage || 300;
+                    currentPage = state.currentPage || 1;
+                    itemsPerPageSelect.value = itemsPerPage;
+                    
+                    // Limpar o estado salvo
+                    localStorage.removeItem('bucketAppState');
+                } catch (e) {
+                    console.error('Erro ao restaurar estado:', e);
+                }
+            }
+            
+            // Sincronizar após reload
+            if (!isSyncing) {
+                syncBucketData().then(() => {
+                    updateBreadcrumb();
+                    if (isSearching && searchInput.value) {
+                        performSearch();
+                    } else {
+                        loadBucketContents();
+                    }
+                });
+            }
+        });
+
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
-            loadBucketContents();
-            updateBreadcrumb();
-            updateSelectionInfo();
+            // Verificar se é um reload (página foi recarregada)
+            const isReload = performance.navigation.type === performance.navigation.TYPE_RELOAD;
+            
+            if (isReload) {
+                // Se for reload, sincronizar primeiro
+                syncBucketData().then(() => {
+                    updateBreadcrumb();
+                    updateSelectionInfo();
+                    
+                    // Restaurar estado se houver
+                    const savedState = localStorage.getItem('bucketAppState');
+                    if (savedState) {
+                        try {
+                            const state = JSON.parse(savedState);
+                            if (state.isSearching && state.searchTerm) {
+                                searchInput.value = state.searchTerm;
+                                performSearch();
+                            } else {
+                                loadBucketContents();
+                            }
+                        } catch (e) {
+                            loadBucketContents();
+                        }
+                    } else {
+                        loadBucketContents();
+                    }
+                });
+            } else {
+                // Carregamento normal
+                loadAllBucketContents();
+                updateBreadcrumb();
+                updateSelectionInfo();
+            }
+            
+            // Iniciar sincronização automática
+            startAutoSync();
+            
+            // Primeira sincronização após 30 segundos (apenas se não for reload)
+            if (!isReload) {
+                setTimeout(() => {
+                    if (!isSyncing) {
+                        syncBucketData();
+                    }
+                }, 30000);
+            }
         });
     </script>
 </body>
