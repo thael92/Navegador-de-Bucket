@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TzionBackup - Navegador de Bucket</title>
+    <title>Bucket</title>
     <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1093.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         * {
@@ -27,11 +28,11 @@
             margin: 0 auto;
             background: #2a2d34;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             overflow: hidden;
         }
 
-                .header {
+        .header {
             background: #2a2d34;
             padding: 30px;
             text-align: center;
@@ -43,9 +44,8 @@
             gap: 20px;
         }
 
-                .header img {
+        .header img {
             border-radius: 8px;
-            
             transition: transform 0.3s ease;
             filter: brightness(0) invert(1);
         }
@@ -53,7 +53,6 @@
         .header img:hover {
             transform: scale(1.05);
         }
-
 
         .header h1 {
             font-size: 2.5em;
@@ -69,7 +68,6 @@
             color: #a0a3a8;
             margin: 0;
         }
-
 
         .controls {
             padding: 30px;
@@ -117,6 +115,59 @@
             transform: translateY(-1px);
         }
 
+        .selection-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #1a1d23;
+            border-radius: 6px;
+            border: 1px solid #3a3d44;
+        }
+
+        .select-all-btn, .clear-selection-btn, .download-selected-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .select-all-btn {
+            background: #3498db;
+            color: white;
+        }
+
+        .select-all-btn:hover {
+            background: #2980b9;
+        }
+
+        .clear-selection-btn {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .clear-selection-btn:hover {
+            background: #c0392b;
+        }
+
+        .download-selected-btn {
+            background: #f39c12;
+            color: white;
+        }
+
+        .download-selected-btn:hover {
+            background: #e67e22;
+        }
+
+        .selection-info {
+            color: #a0a3a8;
+            font-size: 14px;
+            margin-left: auto;
+        }
+
         .breadcrumb {
             display: flex;
             align-items: center;
@@ -135,15 +186,15 @@
         }
 
         .breadcrumb-item:hover {
-            background: #5cb85c;
+            background: #79b49e;
             color: white;
-            border-color: #5cb85c;
+            border-color: #79b49e;
         }
 
         .breadcrumb-item.active {
             background: #79b49e;
             color: white;
-            border-color: #5cb85c;
+            border-color: #79b49e;
         }
 
         .content {
@@ -155,6 +206,42 @@
             text-align: center;
             padding: 50px;
             color: #a0a3a8;
+        }
+
+        .download-progress {
+            background: #1a1d23;
+            border: 1px solid #3a3d44;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #3a3d44;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #79b49e, #449d44);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            color: #e4e6ea;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .progress-details {
+            color: #a0a3a8;
+            font-size: 12px;
         }
 
         .file-list {
@@ -176,6 +263,11 @@
             background: #3a3d44;
         }
 
+        .file-item.selected {
+            background: #2c5530;
+            border-color: #79b49e;
+        }
+
         .file-item:first-child {
             border-top-left-radius: 6px;
             border-top-right-radius: 6px;
@@ -185,6 +277,14 @@
             border-bottom-left-radius: 6px;
             border-bottom-right-radius: 6px;
             border-bottom: none;
+        }
+
+        .file-checkbox {
+            margin-right: 15px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #79b49e;
         }
 
         .file-icon {
@@ -240,9 +340,9 @@
         }
 
         .download-btn:hover {
-            background: #5cb85c;
+            background: #79b49e;
             color: white;
-            border-color: #5cb85c;
+            border-color: #79b49e;
             transform: scale(1.1);
         }
 
@@ -250,6 +350,63 @@
             content: "⬇";
             font-size: 16px;
             font-weight: bold;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+            padding: 20px;
+        }
+
+        .pagination-btn {
+            padding: 8px 12px;
+            background: #1a1d23;
+            color: #e4e6ea;
+            border: 1px solid #3a3d44;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .pagination-btn:hover:not(.disabled) {
+            background: #79b49e;
+            border-color: #79b49e;
+        }
+
+        .pagination-btn.active {
+            background: #79b49e;
+            border-color: #79b49e;
+        }
+
+        .pagination-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: #a0a3a8;
+            font-size: 14px;
+            margin: 0 15px;
+        }
+
+        .items-per-page {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .items-per-page select {
+            padding: 8px 12px;
+            border: 1px solid #3a3d44;
+            border-radius: 4px;
+            background: #1a1d23;
+            color: #e4e6ea;
+            font-size: 14px;
         }
 
         .empty-state {
@@ -260,32 +417,6 @@
 
         .empty-state h3 {
             margin-bottom: 10px;
-            color: #e4e6ea;
-        }
-
-        .client-selector {
-            margin-bottom: 20px;
-        }
-
-        .client-select {
-            padding: 12px 20px;
-            border: 1px solid #3a3d44;
-            border-radius: 6px;
-            font-size: 16px;
-            outline: none;
-            width: 300px;
-            background: #1a1d23;
-            color: #e4e6ea;
-            transition: all 0.3s ease;
-        }
-
-        .client-select:focus {
-            border-color: #79b49e;
-            box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.2);
-        }
-
-        .client-select option {
-            background: #1a1d23;
             color: #e4e6ea;
         }
 
@@ -308,9 +439,28 @@
             text-align: center;
             font-size: 14px;
         }
+
+        .info-message {
+            background: #3498db;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .search-status {
+            color: #a0a3a8;
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #1a1d23;
+            border-radius: 4px;
+            border: 1px solid #3a3d44;
+        }
     </style>
 </head>
-
 <body>
     <div class="container">
         <div class="header">
@@ -319,19 +469,17 @@
             <p>Bucket - Pesquise e baixe seus arquivos</p>
         </div>
 
-
         <div class="controls">
-            <div class="client-selector">
-                <select class="client-select" id="clientSelect">
-                    <option value="">Selecione um cliente</option>
-                    <option value="backupteste">Backup Teste</option>
-                </select>
+            <div class="search-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="Pesquisar pastas ou arquivos..." />
+                <button class="search-btn" onclick="performSearch()">🔍 Pesquisar</button>
             </div>
 
-            <div class="search-container">
-                <input type="text" class="search-input" id="searchInput"
-                    placeholder="Pesquisar pastas ou arquivos..." />
-                <button class="search-btn" onclick="performSearch()">🔍 Pesquisar</button>
+            <div class="selection-controls">
+                <button class="select-all-btn" onclick="selectAll()">✓ Selecionar Todos</button>
+                <button class="clear-selection-btn" onclick="clearSelection()">✗ Limpar Seleção</button>
+                <button class="download-selected-btn" onclick="downloadSelected()">📦 Baixar ZIP Selecionados</button>
+                <div class="selection-info" id="selectionInfo">0 itens selecionados</div>
             </div>
 
             <div class="breadcrumb" id="breadcrumb">
@@ -341,21 +489,45 @@
 
         <div class="content">
             <div id="messageContainer"></div>
+            <div id="downloadProgress" class="download-progress">
+                <div class="progress-text" id="progressText">Preparando download...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-details" id="progressDetails">0 de 0 arquivos processados</div>
+            </div>
+            <div id="searchStatus" class="search-status" style="display: none;"></div>
             <div id="loadingContainer" class="loading" style="display: none;">
                 <p>Carregando conteúdo do bucket...</p>
             </div>
+            
+            <div class="items-per-page">
+                <label for="itemsPerPage">Itens por página:</label>
+                <select id="itemsPerPage">
+                    <option value="20">20</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="300">300</option>
+                    <option value="400">400</option>
+                    <option value="500">500</option>
+                </select>
+            </div>
+
             <div id="contentContainer"></div>
+            
+            <div id="paginationContainer" class="pagination" style="display: none;"></div>
         </div>
     </div>
 
     <script>
-        // Configuração do bucket Wasabi (substitua pelos seus dados reais)
+        // Configuração do bucket Wasabi
         const bucketConfig = {
-            accessKeyId: 'PFXSTUKY2MXDCH5A8MNC', // Seu Access Key ID
-            secretAccessKey: 'eWkekD1O5H7aotMMeiJTikmiDDoIGsDXlc8vd7MK', // **Seu Secret Access Key COMPLETO**
-            endpoint: 'https://s3.us-west-1.wasabisys.com', // Endpoint correto para Wasabi us-west-1
-            region: 'us-west-1', // Região correta do seu bucket Wasabi
-            bucketName: 'backupteste' // Nome do seu bucket Wasabi
+            accessKeyId: 'PFXSTUKY2MXDCH5A8MNC',
+            secretAccessKey: 'eWkekD1O5H7aotMMeiJTikmiDDoIGsDXlc8vd7MK',
+            endpoint: 'https://s3.us-west-1.wasabisys.com',
+            region: 'us-west-1',
+            bucketName: 'backupteste'
         };
 
         // Configurar o AWS SDK
@@ -363,24 +535,35 @@
             accessKeyId: bucketConfig.accessKeyId,
             secretAccessKey: bucketConfig.secretAccessKey,
             region: bucketConfig.region,
-            endpoint: bucketConfig.endpoint, // **ADICIONADO: Endpoint para Wasabi**
-            s3ForcePathStyle: true // **ADICIONADO: Necessário para alguns endpoints S3-compatíveis (como Wasabi)**
+            endpoint: bucketConfig.endpoint,
+            s3ForcePathStyle: true
         });
 
         const s3 = new AWS.S3();
 
         let currentPath = '';
-        // Definir o cliente padrão para 'backupteste' ao invés de 'tzionbackup'
         let currentClient = 'backupteste';
-        let bucketContents = [];
+        let allBucketContents = [];
         let filteredContents = [];
+        let selectedItems = new Set();
+        let currentPage = 1;
+        let itemsPerPage = 50;
+        let isSearching = false;
+        let searchTimeout;
 
         const contentContainer = document.getElementById('contentContainer');
         const loadingContainer = document.getElementById('loadingContainer');
         const messageContainer = document.getElementById('messageContainer');
         const breadcrumbContainer = document.getElementById('breadcrumb');
         const searchInput = document.getElementById('searchInput');
-        const clientSelect = document.getElementById('clientSelect');
+        const paginationContainer = document.getElementById('paginationContainer');
+        const itemsPerPageSelect = document.getElementById('itemsPerPage');
+        const searchStatus = document.getElementById('searchStatus');
+        const selectionInfo = document.getElementById('selectionInfo');
+        const downloadProgress = document.getElementById('downloadProgress');
+        const progressText = document.getElementById('progressText');
+        const progressFill = document.getElementById('progressFill');
+        const progressDetails = document.getElementById('progressDetails');
 
         function showMessage(message, type = 'info') {
             messageContainer.innerHTML = `<div class="${type}-message">${message}</div>`;
@@ -398,69 +581,535 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
-        function displayContents(items) {
-            contentContainer.innerHTML = '';
-            if (items.length === 0) {
-                contentContainer.innerHTML = '<div class="empty-state"><h3>Nenhum conteúdo encontrado.</h3><p>Tente voltar para a pasta anterior ou ajustar sua pesquisa.</p></div>';
+        function updateSelectionInfo() {
+            const count = selectedItems.size;
+            selectionInfo.textContent = `${count} ${count === 1 ? 'item selecionado' : 'itens selecionados'}`;
+        }
+
+        function toggleItemSelection(itemName, checkbox) {
+            if (checkbox.checked) {
+                selectedItems.add(itemName);
+            } else {
+                selectedItems.delete(itemName);
+            }
+            
+            const fileItem = checkbox.closest('.file-item');
+            if (checkbox.checked) {
+                fileItem.classList.add('selected');
+            } else {
+                fileItem.classList.remove('selected');
+            }
+            
+            updateSelectionInfo();
+        }
+
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                const itemName = checkbox.getAttribute('data-name');
+                selectedItems.add(itemName);
+                checkbox.closest('.file-item').classList.add('selected');
+            });
+            updateSelectionInfo();
+        }
+
+        function clearSelection() {
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.closest('.file-item').classList.remove('selected');
+            });
+            selectedItems.clear();
+            updateSelectionInfo();
+        }
+
+        function showProgress(show = true) {
+            downloadProgress.style.display = show ? 'block' : 'none';
+            if (!show) {
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Preparando download...';
+                progressDetails.textContent = '0 de 0 arquivos processados';
+            }
+        }
+
+        function updateProgress(current, total, currentFile = '') {
+            const percentage = total > 0 ? (current / total) * 100 : 0;
+            progressFill.style.width = `${percentage}%`;
+            progressText.textContent = currentFile ? `Baixando: ${currentFile}` : 'Processando arquivos...';
+            progressDetails.textContent = `${current} de ${total} arquivos processados`;
+        }
+
+        async function getFileContent(key) {
+            const params = {
+                Bucket: bucketConfig.bucketName,
+                Key: key
+            };
+            
+            try {
+                const data = await s3.getObject(params).promise();
+                return data.Body;
+            } catch (err) {
+                console.error(`Erro ao baixar arquivo ${key}:`, err);
+                throw err;
+            }
+        }
+
+        async function getFolderContents(folderPrefix) {
+            const params = {
+                Bucket: bucketConfig.bucketName,
+                Prefix: folderPrefix
+            };
+
+            try {
+                const data = await s3.listObjectsV2(params).promise();
+                return data.Contents ? data.Contents.filter(item => !item.Key.endsWith('/')) : [];
+            } catch (err) {
+                console.error(`Erro ao listar conteúdo da pasta ${folderPrefix}:`, err);
+                throw err;
+            }
+        }
+
+        async function downloadSelected() {
+            if (selectedItems.size === 0) {
+                showMessage('Nenhum item selecionado para download.', 'error');
                 return;
             }
+
+            const selectedArray = Array.from(selectedItems);
+            const zip = new JSZip();
+            let totalFiles = 0;
+            let processedFiles = 0;
+            let allFilesToProcess = [];
+
+            showProgress(true);
+            showMessage(`Preparando download de ${selectedArray.length} itens...`, 'info');
+
+            try {
+                // Primeiro, vamos descobrir todos os arquivos que precisamos processar
+                for (const itemName of selectedArray) {
+                    const item = [...filteredContents, ...allBucketContents].find(i => i.name === itemName);
+                    
+                    if (item && item.type === 'folder') {
+                        const folderContents = await getFolderContents(itemName);
+                        allFilesToProcess.push(...folderContents.map(file => ({
+                            key: file.Key,
+                            size: file.Size,
+                            isFromFolder: true,
+                            folderName: itemName
+                        })));
+                    } else {
+                        allFilesToProcess.push({
+                            key: itemName,
+                            size: item ? item.size : 0,
+                            isFromFolder: false
+                        });
+                    }
+                }
+
+                totalFiles = allFilesToProcess.length;
+                updateProgress(0, totalFiles);
+
+                if (totalFiles === 0) {
+                    showMessage('Nenhum arquivo encontrado para download.', 'error');
+                    showProgress(false);
+                    return;
+                }
+
+                // Agora vamos baixar todos os arquivos e adicionar ao ZIP
+                for (const fileInfo of allFilesToProcess) {
+                    try {
+                        const fileName = fileInfo.key.split('/').pop();
+                        updateProgress(processedFiles, totalFiles, fileName);
+
+                        const fileContent = await getFileContent(fileInfo.key);
+                        
+                        // Determinar o caminho no ZIP
+                        let zipPath;
+                        if (fileInfo.isFromFolder) {
+                            // Manter a estrutura da pasta
+                            const relativePath = fileInfo.key.replace(fileInfo.folderName, '');
+                            const folderDisplayName = fileInfo.folderName.split('/').filter(p => p).pop();
+                            zipPath = `${folderDisplayName}${relativePath}`;
+                        } else {
+                            // Arquivo individual
+                            zipPath = fileName;
+                        }
+
+                        zip.file(zipPath, fileContent);
+                        processedFiles++;
+                        
+                    } catch (fileErr) {
+                        console.error(`Erro ao processar arquivo ${fileInfo.key}:`, fileErr);
+                        processedFiles++; // Continuar mesmo com erro
+                    }
+                }
+
+                updateProgress(totalFiles, totalFiles, 'Gerando arquivo ZIP...');
+
+                // Gerar o ZIP e fazer download
+                const zipBlob = await zip.generateAsync({
+                    type: "blob",
+                    compression: "DEFLATE",
+                    compressionOptions: {
+                        level: 6
+                    }
+                });
+
+                // Criar nome do arquivo ZIP
+                let zipFileName;
+                if (selectedArray.length === 1) {
+                    const singleItem = [...filteredContents, ...allBucketContents].find(i => i.name === selectedArray[0]);
+                    if (singleItem && singleItem.type === 'folder') {
+                        const folderName = singleItem.name.split('/').filter(p => p).pop();
+                        zipFileName = `${folderName}.zip`;
+                    } else {
+                        zipFileName = `arquivo_${new Date().toISOString().slice(0, 10)}.zip`;
+                    }
+                } else {
+                    zipFileName = `backup_${selectedArray.length}_itens_${new Date().toISOString().slice(0, 10)}.zip`;
+                }
+
+                // Fazer download do ZIP
+                saveAs(zipBlob, zipFileName);
+
+                showMessage(`Download concluído! ${processedFiles} arquivos compactados em ${zipFileName}`, 'success');
+                clearSelection();
+
+            } catch (err) {
+                console.error("Erro durante o download:", err);
+                showMessage(`Erro durante o download: ${err.message}`, 'error');
+            } finally {
+                showProgress(false);
+            }
+        }
+
+        async function downloadSingleItem(itemName) {
+            const item = [...filteredContents, ...allBucketContents].find(i => i.name === itemName);
+            
+            if (!item) {
+                showMessage('Item não encontrado.', 'error');
+                return;
+            }
+
+            if (item.type === 'folder') {
+                // Download de pasta individual como ZIP
+                showProgress(true);
+                const zip = new JSZip();
+                
+                try {
+                    const folderContents = await getFolderContents(itemName);
+                    const totalFiles = folderContents.length;
+                    
+                    if (totalFiles === 0) {
+                        showMessage('Pasta vazia.', 'error');
+                        showProgress(false);
+                        return;
+                    }
+
+                    updateProgress(0, totalFiles);
+
+                    for (let i = 0; i < folderContents.length; i++) {
+                        const file = folderContents[i];
+                        const fileName = file.Key.split('/').pop();
+                        
+                        try {
+                            updateProgress(i, totalFiles, fileName);
+                            const fileContent = await getFileContent(file.Key);
+                            
+                            // Manter estrutura de subpastas
+                            const relativePath = file.Key.replace(itemName, '');
+                            zip.file(relativePath, fileContent);
+                            
+                        } catch (fileErr) {
+                            console.error(`Erro ao baixar arquivo ${file.Key}:`, fileErr);
+                        }
+                    }
+
+                    updateProgress(totalFiles, totalFiles, 'Gerando arquivo ZIP...');
+
+                    const zipBlob = await zip.generateAsync({
+                        type: "blob",
+                        compression: "DEFLATE",
+                        compressionOptions: {
+                            level: 6
+                        }
+                    });
+
+                    const folderName = itemName.split('/').filter(p => p).pop();
+                    const zipFileName = `${folderName}.zip`;
+                    
+                    saveAs(zipBlob, zipFileName);
+                    showMessage(`Download da pasta ${folderName} concluído!`, 'success');
+
+                } catch (err) {
+                    console.error("Erro ao baixar pasta:", err);
+                    showMessage(`Erro ao baixar pasta: ${err.message}`, 'error');
+                } finally {
+                    showProgress(false);
+                }
+            } else {
+                // Download de arquivo individual (método tradicional)
+                try {
+                    showMessage(`Iniciando download: ${item.displayName || itemName}...`, 'info');
+                    
+                    const params = {
+                        Bucket: bucketConfig.bucketName,
+                        Key: itemName,
+                        Expires: 60
+                    };
+
+                    const url = await s3.getSignedUrlPromise('getObject', params);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = itemName.split('/').pop();
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    showMessage(`Download iniciado: ${item.displayName || itemName}`, 'success');
+                } catch (err) {
+                    console.error("Erro ao gerar URL de download:", err);
+                    showMessage(`Erro ao iniciar download: ${err.message}`, 'error');
+                }
+            }
+        }
+
+        function displayContents(items) {
+            contentContainer.innerHTML = '';
+            
+            if (items.length === 0) {
+                contentContainer.innerHTML = '<div class="empty-state"><h3>Nenhum conteúdo encontrado.</h3><p>Tente ajustar sua pesquisa ou navegar para outra pasta.</p></div>';
+                paginationContainer.style.display = 'none';
+                return;
+            }
+
+            // Calcular paginação
+            const totalPages = Math.ceil(items.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const paginatedItems = items.slice(startIndex, endIndex);
 
             const fileList = document.createElement('div');
             fileList.classList.add('file-list');
 
             // Sort folders first, then files, alphabetically
-            items.sort((a, b) => {
+            paginatedItems.sort((a, b) => {
                 if (a.type === 'folder' && b.type !== 'folder') return -1;
                 if (a.type !== 'folder' && b.type === 'folder') return 1;
-                // For files and folders, display only the name relative to the current path
-                const nameA = a.name.replace(currentPath, '');
-                const nameB = b.name.replace(currentPath, '');
+                const nameA = a.displayName || a.name;
+                const nameB = b.displayName || b.name;
                 return nameA.localeCompare(nameB);
             });
 
-            items.forEach(item => {
+            paginatedItems.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.classList.add('file-item');
                 itemDiv.setAttribute('data-name', item.name);
                 itemDiv.setAttribute('data-type', item.type);
 
+                // Verificar se item está selecionado
+                if (selectedItems.has(item.name)) {
+                    itemDiv.classList.add('selected');
+                }
+
                 let icon = '';
                 let details = '';
-                const displayName = item.name.replace(currentPath, ''); // Get name relative to current path
+                const displayName = item.displayName || item.name.replace(currentPath, '');
 
                 if (item.type === 'folder') {
-                    icon = '<i class="fas fa-folder folder-icon"></i>'; // Font Awesome folder icon
+                    icon = '<i class="fas fa-folder folder-icon"></i>';
                     details = `Pasta`;
-                    itemDiv.onclick = () => navigateTo(item.name);
                 } else {
-                    icon = '<i class="fas fa-file file-icon"></i>'; // Font Awesome file icon
+                    icon = '<i class="fas fa-file file-icon"></i>';
                     details = `${formatBytes(item.size)} | ${item.lastModified.toLocaleDateString()} ${item.lastModified.toLocaleTimeString()}`;
-                    itemDiv.onclick = () => downloadItem(item.name);
                 }
 
                 itemDiv.innerHTML = `
+                    <input type="checkbox" class="file-checkbox" data-name="${item.name}" 
+                           ${selectedItems.has(item.name) ? 'checked' : ''} 
+                           onchange="toggleItemSelection('${item.name}', this)" 
+                           onclick="event.stopPropagation()">
                     <div class="file-icon">${icon}</div>
                     <div class="file-info">
                         <div class="file-name">${displayName}</div>
                         <div class="file-details">${details}</div>
                     </div>
-                    ${item.type === 'file' ? '<button class="download-btn" onclick="event.stopPropagation(); downloadItem(\'' + item.name + '\')"></button>' : ''}
+                    <button class="download-btn" onclick="event.stopPropagation(); downloadSingleItem('${item.name}')" title="${item.type === 'folder' ? 'Baixar pasta como ZIP' : 'Baixar arquivo'}"></button>
                 `;
+
+                // Adicionar click para navegação apenas em pastas
+                if (item.type === 'folder') {
+                    itemDiv.onclick = (e) => {
+                        // Não navegar se clicou no checkbox ou botão download
+                        if (e.target.classList.contains('file-checkbox') || e.target.classList.contains('download-btn')) {
+                            return;
+                        }
+                        navigateTo(item.name);
+                    };
+                }
+
                 fileList.appendChild(itemDiv);
             });
+            
             contentContainer.appendChild(fileList);
+            
+            // Mostrar paginação se necessário
+            if (totalPages > 1) {
+                displayPagination(totalPages, items.length);
+            } else {
+                paginationContainer.style.display = 'none';
+            }
+        }
+
+        function displayPagination(totalPages, totalItems) {
+            paginationContainer.innerHTML = '';
+            paginationContainer.style.display = 'flex';
+
+            // Botão anterior
+            const prevBtn = document.createElement('button');
+            prevBtn.classList.add('pagination-btn');
+            prevBtn.textContent = '← Anterior';
+            prevBtn.onclick = () => changePage(currentPage - 1);
+            if (currentPage === 1) prevBtn.classList.add('disabled');
+            paginationContainer.appendChild(prevBtn);
+
+            // Números das páginas
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+
+            if (startPage > 1) {
+                const firstBtn = document.createElement('button');
+                firstBtn.classList.add('pagination-btn');
+                firstBtn.textContent = '1';
+                firstBtn.onclick = () => changePage(1);
+                paginationContainer.appendChild(firstBtn);
+
+                if (startPage > 2) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.textContent = '...';
+                    ellipsis.style.color = '#a0a3a8';
+                    paginationContainer.appendChild(ellipsis);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.classList.add('pagination-btn');
+                pageBtn.textContent = i;
+                pageBtn.onclick = () => changePage(i);
+                if (i === currentPage) pageBtn.classList.add('active');
+                paginationContainer.appendChild(pageBtn);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.textContent = '...';
+                    ellipsis.style.color = '#a0a3a8';
+                    paginationContainer.appendChild(ellipsis);
+                }
+
+                const lastBtn = document.createElement('button');
+                lastBtn.classList.add('pagination-btn');
+                lastBtn.textContent = totalPages;
+                lastBtn.onclick = () => changePage(totalPages);
+                paginationContainer.appendChild(lastBtn);
+            }
+
+            // Info da paginação
+            const info = document.createElement('div');
+            info.classList.add('pagination-info');
+            const startItem = (currentPage - 1) * itemsPerPage + 1;
+            const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+            info.textContent = `${startItem}-${endItem} de ${totalItems} itens`;
+            paginationContainer.appendChild(info);
+
+            // Botão próximo
+            const nextBtn = document.createElement('button');
+            nextBtn.classList.add('pagination-btn');
+            nextBtn.textContent = 'Próximo →';
+            nextBtn.onclick = () => changePage(currentPage + 1);
+            if (currentPage === totalPages) nextBtn.classList.add('disabled');
+            paginationContainer.appendChild(nextBtn);
+        }
+
+        function changePage(page) {
+            if (page < 1 || page > Math.ceil(filteredContents.length / itemsPerPage)) return;
+            currentPage = page;
+            displayContents(filteredContents);
+        }
+
+        async function loadAllBucketContents() {
+            loadingContainer.style.display = 'block';
+            contentContainer.innerHTML = '';
+            allBucketContents = [];
+
+            try {
+                let continuationToken = null;
+                let totalLoaded = 0;
+
+                do {
+                    const params = {
+                        Bucket: bucketConfig.bucketName,
+                        MaxKeys: 1000,
+                        ContinuationToken: continuationToken
+                    };
+
+                    const data = await s3.listObjectsV2(params).promise();
+                    
+                    if (data.Contents) {
+                        data.Contents.forEach(content => {
+                            if (!content.Key.endsWith('/')) {
+                                allBucketContents.push({
+                                    name: content.Key,
+                                    type: 'file',
+                                    size: content.Size,
+                                    lastModified: new Date(content.LastModified),
+                                    displayName: content.Key.split('/').pop()
+                                });
+                            } else {
+                                allBucketContents.push({
+                                    name: content.Key,
+                                    type: 'folder',
+                                    size: null,
+                                    lastModified: new Date(content.LastModified),
+                                    displayName: content.Key.split('/').filter(p => p).pop()
+                                });
+                            }
+                        });
+                    }
+
+                    totalLoaded += data.Contents ? data.Contents.length : 0;
+                    continuationToken = data.NextContinuationToken;
+
+                    loadingContainer.innerHTML = `<p>Carregando conteúdo do bucket... (${totalLoaded} itens carregados)</p>`;
+
+                } while (continuationToken);
+
+                loadingContainer.style.display = 'none';
+                
+                if (isSearching) {
+                    performSearch();
+                } else {
+                    loadBucketContents();
+                }
+
+            } catch (err) {
+                console.error("Erro ao listar conteúdo do bucket:", err);
+                showMessage(`Erro ao carregar conteúdo do bucket: ${err.message}`, 'error');
+                loadingContainer.style.display = 'none';
+            }
         }
 
         async function loadBucketContents() {
-            if (!currentClient || currentClient !== bucketConfig.bucketName) { // Ensure the selected client matches the configured bucket
-                contentContainer.innerHTML = '';
-                showMessage('Selecione um cliente válido para começar a navegar pelo bucket.', 'info');
+            if (isSearching) {
                 return;
             }
 
             loadingContainer.style.display = 'block';
             contentContainer.innerHTML = '';
-            bucketContents = [];
+            let bucketContents = [];
 
             const params = {
                 Bucket: bucketConfig.bucketName,
@@ -478,7 +1127,8 @@
                             name: commonPrefix.Prefix,
                             type: 'folder',
                             size: null,
-                            lastModified: null
+                            lastModified: null,
+                            displayName: commonPrefix.Prefix.replace(currentPath, '').replace('/', '')
                         });
                     });
                 }
@@ -486,8 +1136,6 @@
                 // Add files (Contents)
                 if (data.Contents) {
                     data.Contents.forEach(content => {
-                        // Exclude the current path itself if it's returned as a file (e.g., for empty folders)
-                        // Also, ensure the file is directly in the current path, not a sub-folder's file
                         const keyParts = content.Key.split('/').filter(p => p !== '');
                         const currentPathParts = currentPath.split('/').filter(p => p !== '');
 
@@ -496,15 +1144,18 @@
                                 name: content.Key,
                                 type: 'file',
                                 size: content.Size,
-                                lastModified: new Date(content.LastModified)
+                                lastModified: new Date(content.LastModified),
+                                displayName: content.Key.split('/').pop()
                             });
                         }
                     });
                 }
 
-                filteredContents = [...bucketContents]; // Initialize filtered with all contents
+                filteredContents = [...bucketContents];
+                currentPage = 1;
                 displayContents(filteredContents);
                 loadingContainer.style.display = 'none';
+                searchStatus.style.display = 'none';
 
             } catch (err) {
                 console.error("Erro ao listar conteúdo do bucket:", err);
@@ -514,30 +1165,34 @@
         }
 
         function navigateTo(path) {
-            if (path === '') { // Navigate to root
+            isSearching = false;
+            searchInput.value = '';
+            
+            if (path === '') {
                 currentPath = '';
-            } else if (path.endsWith('/')) { // Navigate into a folder
+            } else if (path.endsWith('/')) {
                 currentPath = path;
-            } else { // This path is generally not used for files via direct click; files are downloaded.
-                // This 'else' might be triggered if a breadcrumb for a specific file (not a folder path) was clickable, which is not the typical behavior of this app.
+            } else {
                 const pathParts = currentPath.split('/').filter(p => p !== '');
                 if (pathParts.length > 0) {
-                    pathParts.pop(); // Remove the last part (current folder)
+                    pathParts.pop();
                     currentPath = pathParts.join('/');
                     if (currentPath !== '') {
                         currentPath += '/';
                     }
                 } else {
-                    currentPath = ''; // Already at root
+                    currentPath = '';
                 }
             }
-            searchInput.value = ''; // Clear search when navigating
+            
+            clearSelection();
             updateBreadcrumb();
             loadBucketContents();
         }
 
         function updateBreadcrumb() {
             breadcrumbContainer.innerHTML = '';
+            
             const rootItem = document.createElement('div');
             rootItem.classList.add('breadcrumb-item');
             rootItem.textContent = '🏠 Raiz';
@@ -546,7 +1201,7 @@
                 rootItem.classList.add('active');
             }
             breadcrumbContainer.appendChild(rootItem);
-
+            
             if (currentPath) {
                 const pathParts = currentPath.split('/').filter(p => p !== '');
                 let fullPath = '';
@@ -565,70 +1220,69 @@
             }
         }
 
-        async function downloadItem(itemName) {
-            showMessage(`Iniciando download: ${itemName}...`, 'info');
-            const params = {
-                Bucket: bucketConfig.bucketName,
-                Key: itemName,
-                Expires: 60 // URL expira em 60 segundos
-            };
-
-            try {
-                const url = await s3.getSignedUrlPromise('getObject', params);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = itemName.split('/').pop(); // Extrai o nome do arquivo da chave
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                showMessage(`Download iniciado: ${itemName}`, 'success');
-            } catch (err) {
-                console.error("Erro ao gerar URL de download:", err);
-                showMessage(`Erro ao iniciar download: ${err.message}`, 'error');
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            if (searchTerm === '') {
+                isSearching = false;
+                searchStatus.style.display = 'none';
+                clearSelection();
+                loadBucketContents();
+                return;
             }
+
+            isSearching = true;
+            
+            if (allBucketContents.length === 0) {
+                loadAllBucketContents();
+                return;
+            }
+
+            filteredContents = allBucketContents.filter(item => {
+                const itemName = item.name.toLowerCase();
+                const displayName = item.displayName ? item.displayName.toLowerCase() : '';
+                return itemName.includes(searchTerm) || displayName.includes(searchTerm);
+            });
+
+            currentPage = 1;
+            clearSelection();
+            
+            searchStatus.style.display = 'block';
+            searchStatus.textContent = `Pesquisando por "${searchInput.value}" - ${filteredContents.length} resultados encontrados`;
+            
+            displayContents(filteredContents);
+            breadcrumbContainer.innerHTML = '';
         }
 
-        function performSearch() {
-            const searchTerm = searchInput.value.toLowerCase();
-            if (searchTerm === '') {
-                filteredContents = [...bucketContents];
-            } else {
-                filteredContents = bucketContents.filter(item =>
-                    item.name.toLowerCase().includes(searchTerm)
-                );
-            }
-            displayContents(filteredContents);
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                performSearch();
+            }, 300);
         }
 
         // Event listeners
-        clientSelect.addEventListener('change', function (e) {
-            currentClient = e.target.value;
-            currentPath = ''; // Reset path when client changes
-            if (currentClient) {
-                loadBucketContents();
-                updateBreadcrumb();
-            } else {
-                contentContainer.innerHTML = '';
-                bucketContents = [];
-                filteredContents = [];
-                showMessage('Selecione um cliente para começar a navegar pelo bucket.', 'info');
-            }
-        });
+        searchInput.addEventListener('input', debounceSearch);
 
-        searchInput.addEventListener('keypress', function (e) {
+        searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
+                clearTimeout(searchTimeout);
                 performSearch();
             }
         });
 
+        itemsPerPageSelect.addEventListener('change', function(e) {
+            itemsPerPage = parseInt(e.target.value);
+            currentPage = 1;
+            displayContents(filteredContents);
+        });
+
         // Inicialização
-        document.addEventListener('DOMContentLoaded', function () {
-            // Set the clientSelect value to 'backupteste' and trigger load
-            clientSelect.value = 'backupteste'; // Ensure this matches the correct bucket name from bucketConfig
+        document.addEventListener('DOMContentLoaded', function() {
             loadBucketContents();
             updateBreadcrumb();
+            updateSelectionInfo();
         });
     </script>
 </body>
-
 </html>
