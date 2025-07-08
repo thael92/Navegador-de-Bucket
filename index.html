@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TzionBackup - Navegador de Bucket</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1093.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1d23;
+            min-height: 100vh;
+            padding: 20px;
+            color: #e4e6ea;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #2a2d34;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+                .header {
+            background: #2a2d34;
+            padding: 30px;
+            text-align: center;
+            color: #e4e6ea;
+            border-bottom: 1px solid #3a3d44;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+                .header img {
+            border-radius: 8px;
+            
+            transition: transform 0.3s ease;
+            filter: brightness(0) invert(1);
+        }
+
+        .header img:hover {
+            transform: scale(1.05);
+        }
+
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+            color: #e4e6ea;
+            margin: 0;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.8;
+            color: #a0a3a8;
+            margin: 0;
+        }
+
+
+        .controls {
+            padding: 30px;
+            background: #2a2d34;
+            border-bottom: 1px solid #3a3d44;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: 1px solid #3a3d44;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+            background: #1a1d23;
+            color: #e4e6ea;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: #79b49e;
+            box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.2);
+        }
+
+        .search-btn {
+            padding: 12px 25px;
+            background: #79b49e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-btn:hover {
+            background: #449d44;
+            transform: translateY(-1px);
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #a0a3a8;
+        }
+
+        .breadcrumb-item {
+            padding: 5px 10px;
+            background: #1a1d23;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #3a3d44;
+        }
+
+        .breadcrumb-item:hover {
+            background: #5cb85c;
+            color: white;
+            border-color: #5cb85c;
+        }
+
+        .breadcrumb-item.active {
+            background: #79b49e;
+            color: white;
+            border-color: #5cb85c;
+        }
+
+        .content {
+            padding: 30px;
+            background: #2a2d34;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #a0a3a8;
+        }
+
+        .file-list {
+            display: grid;
+            gap: 2px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            background: #1a1d23;
+            border-bottom: 1px solid #3a3d44;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .file-item:hover {
+            background: #3a3d44;
+        }
+
+        .file-item:first-child {
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        }
+
+        .file-item:last-child {
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            border-bottom: none;
+        }
+
+        .file-icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #a0a3a8;
+        }
+
+        .folder-icon {
+            color: #f39c12;
+        }
+
+        .file-icon.file {
+            color: #3498db;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e4e6ea;
+            margin-bottom: 3px;
+        }
+
+        .file-details {
+            font-size: 12px;
+            color: #a0a3a8;
+        }
+
+        .download-btn {
+            width: 35px;
+            height: 35px;
+            background: transparent;
+            color: #a0a3a8;
+            border: 2px solid #a0a3a8;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            margin-left: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .download-btn:hover {
+            background: #5cb85c;
+            color: white;
+            border-color: #5cb85c;
+            transform: scale(1.1);
+        }
+
+        .download-btn::before {
+            content: "⬇";
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #a0a3a8;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #e4e6ea;
+        }
+
+        .client-selector {
+            margin-bottom: 20px;
+        }
+
+        .client-select {
+            padding: 12px 20px;
+            border: 1px solid #3a3d44;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+            width: 300px;
+            background: #1a1d23;
+            color: #e4e6ea;
+            transition: all 0.3s ease;
+        }
+
+        .client-select:focus {
+            border-color: #79b49e;
+            box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.2);
+        }
+
+        .client-select option {
+            background: #1a1d23;
+            color: #e4e6ea;
+        }
+
+        .error-message {
+            background: #d9534f;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .success-message {
+            background: #79b49e;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="./logotipo-ASL.png" alt="logo-ASL" width="100" height="100" />
+            
+            <p>Bucket - Pesquise e baixe seus arquivos</p>
+        </div>
+
+
+        <div class="controls">
+            <div class="client-selector">
+                <select class="client-select" id="clientSelect">
+                    <option value="">Selecione um cliente</option>
+                    <option value="backupteste">Backup Teste</option>
+                </select>
+            </div>
+
+            <div class="search-container">
+                <input type="text" class="search-input" id="searchInput"
+                    placeholder="Pesquisar pastas ou arquivos..." />
+                <button class="search-btn" onclick="performSearch()">🔍 Pesquisar</button>
+            </div>
+
+            <div class="breadcrumb" id="breadcrumb">
+                <div class="breadcrumb-item active" onclick="navigateTo('')">🏠 Raiz</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="messageContainer"></div>
+            <div id="loadingContainer" class="loading" style="display: none;">
+                <p>Carregando conteúdo do bucket...</p>
+            </div>
+            <div id="contentContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração do bucket Wasabi (substitua pelos seus dados reais)
+        const bucketConfig = {
+            accessKeyId: 'PFXSTUKY2MXDCH5A8MNC', // Seu Access Key ID
+            secretAccessKey: 'eWkekD1O5H7aotMMeiJTikmiDDoIGsDXlc8vd7MK', // **Seu Secret Access Key COMPLETO**
+            endpoint: 'https://s3.us-west-1.wasabisys.com', // Endpoint correto para Wasabi us-west-1
+            region: 'us-west-1', // Região correta do seu bucket Wasabi
+            bucketName: 'backupteste' // Nome do seu bucket Wasabi
+        };
+
+        // Configurar o AWS SDK
+        AWS.config.update({
+            accessKeyId: bucketConfig.accessKeyId,
+            secretAccessKey: bucketConfig.secretAccessKey,
+            region: bucketConfig.region,
+            endpoint: bucketConfig.endpoint, // **ADICIONADO: Endpoint para Wasabi**
+            s3ForcePathStyle: true // **ADICIONADO: Necessário para alguns endpoints S3-compatíveis (como Wasabi)**
+        });
+
+        const s3 = new AWS.S3();
+
+        let currentPath = '';
+        // Definir o cliente padrão para 'backupteste' ao invés de 'tzionbackup'
+        let currentClient = 'backupteste';
+        let bucketContents = [];
+        let filteredContents = [];
+
+        const contentContainer = document.getElementById('contentContainer');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const messageContainer = document.getElementById('messageContainer');
+        const breadcrumbContainer = document.getElementById('breadcrumb');
+        const searchInput = document.getElementById('searchInput');
+        const clientSelect = document.getElementById('clientSelect');
+
+        function showMessage(message, type = 'info') {
+            messageContainer.innerHTML = `<div class="${type}-message">${message}</div>`;
+            setTimeout(() => {
+                messageContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function displayContents(items) {
+            contentContainer.innerHTML = '';
+            if (items.length === 0) {
+                contentContainer.innerHTML = '<div class="empty-state"><h3>Nenhum conteúdo encontrado.</h3><p>Tente voltar para a pasta anterior ou ajustar sua pesquisa.</p></div>';
+                return;
+            }
+
+            const fileList = document.createElement('div');
+            fileList.classList.add('file-list');
+
+            // Sort folders first, then files, alphabetically
+            items.sort((a, b) => {
+                if (a.type === 'folder' && b.type !== 'folder') return -1;
+                if (a.type !== 'folder' && b.type === 'folder') return 1;
+                // For files and folders, display only the name relative to the current path
+                const nameA = a.name.replace(currentPath, '');
+                const nameB = b.name.replace(currentPath, '');
+                return nameA.localeCompare(nameB);
+            });
+
+            items.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.classList.add('file-item');
+                itemDiv.setAttribute('data-name', item.name);
+                itemDiv.setAttribute('data-type', item.type);
+
+                let icon = '';
+                let details = '';
+                const displayName = item.name.replace(currentPath, ''); // Get name relative to current path
+
+                if (item.type === 'folder') {
+                    icon = '<i class="fas fa-folder folder-icon"></i>'; // Font Awesome folder icon
+                    details = `Pasta`;
+                    itemDiv.onclick = () => navigateTo(item.name);
+                } else {
+                    icon = '<i class="fas fa-file file-icon"></i>'; // Font Awesome file icon
+                    details = `${formatBytes(item.size)} | ${item.lastModified.toLocaleDateString()} ${item.lastModified.toLocaleTimeString()}`;
+                    itemDiv.onclick = () => downloadItem(item.name);
+                }
+
+                itemDiv.innerHTML = `
+                    <div class="file-icon">${icon}</div>
+                    <div class="file-info">
+                        <div class="file-name">${displayName}</div>
+                        <div class="file-details">${details}</div>
+                    </div>
+                    ${item.type === 'file' ? '<button class="download-btn" onclick="event.stopPropagation(); downloadItem(\'' + item.name + '\')"></button>' : ''}
+                `;
+                fileList.appendChild(itemDiv);
+            });
+            contentContainer.appendChild(fileList);
+        }
+
+        async function loadBucketContents() {
+            if (!currentClient || currentClient !== bucketConfig.bucketName) { // Ensure the selected client matches the configured bucket
+                contentContainer.innerHTML = '';
+                showMessage('Selecione um cliente válido para começar a navegar pelo bucket.', 'info');
+                return;
+            }
+
+            loadingContainer.style.display = 'block';
+            contentContainer.innerHTML = '';
+            bucketContents = [];
+
+            const params = {
+                Bucket: bucketConfig.bucketName,
+                Prefix: currentPath,
+                Delimiter: '/'
+            };
+
+            try {
+                const data = await s3.listObjectsV2(params).promise();
+
+                // Add folders (CommonPrefixes)
+                if (data.CommonPrefixes) {
+                    data.CommonPrefixes.forEach(commonPrefix => {
+                        bucketContents.push({
+                            name: commonPrefix.Prefix,
+                            type: 'folder',
+                            size: null,
+                            lastModified: null
+                        });
+                    });
+                }
+
+                // Add files (Contents)
+                if (data.Contents) {
+                    data.Contents.forEach(content => {
+                        // Exclude the current path itself if it's returned as a file (e.g., for empty folders)
+                        // Also, ensure the file is directly in the current path, not a sub-folder's file
+                        const keyParts = content.Key.split('/').filter(p => p !== '');
+                        const currentPathParts = currentPath.split('/').filter(p => p !== '');
+
+                        if (content.Key !== currentPath && keyParts.length === currentPathParts.length + 1) {
+                            bucketContents.push({
+                                name: content.Key,
+                                type: 'file',
+                                size: content.Size,
+                                lastModified: new Date(content.LastModified)
+                            });
+                        }
+                    });
+                }
+
+                filteredContents = [...bucketContents]; // Initialize filtered with all contents
+                displayContents(filteredContents);
+                loadingContainer.style.display = 'none';
+
+            } catch (err) {
+                console.error("Erro ao listar conteúdo do bucket:", err);
+                showMessage(`Erro ao carregar conteúdo do bucket: ${err.message}`, 'error');
+                loadingContainer.style.display = 'none';
+            }
+        }
+
+        function navigateTo(path) {
+            if (path === '') { // Navigate to root
+                currentPath = '';
+            } else if (path.endsWith('/')) { // Navigate into a folder
+                currentPath = path;
+            } else { // This path is generally not used for files via direct click; files are downloaded.
+                // This 'else' might be triggered if a breadcrumb for a specific file (not a folder path) was clickable, which is not the typical behavior of this app.
+                const pathParts = currentPath.split('/').filter(p => p !== '');
+                if (pathParts.length > 0) {
+                    pathParts.pop(); // Remove the last part (current folder)
+                    currentPath = pathParts.join('/');
+                    if (currentPath !== '') {
+                        currentPath += '/';
+                    }
+                } else {
+                    currentPath = ''; // Already at root
+                }
+            }
+            searchInput.value = ''; // Clear search when navigating
+            updateBreadcrumb();
+            loadBucketContents();
+        }
+
+        function updateBreadcrumb() {
+            breadcrumbContainer.innerHTML = '';
+            const rootItem = document.createElement('div');
+            rootItem.classList.add('breadcrumb-item');
+            rootItem.textContent = '🏠 Raiz';
+            rootItem.onclick = () => navigateTo('');
+            if (currentPath === '') {
+                rootItem.classList.add('active');
+            }
+            breadcrumbContainer.appendChild(rootItem);
+
+            if (currentPath) {
+                const pathParts = currentPath.split('/').filter(p => p !== '');
+                let fullPath = '';
+                pathParts.forEach((part, index) => {
+                    fullPath += part + '/';
+                    const breadcrumbItem = document.createElement('div');
+                    breadcrumbItem.classList.add('breadcrumb-item');
+                    breadcrumbItem.textContent = part;
+                    const navPath = fullPath;
+                    breadcrumbItem.onclick = () => navigateTo(navPath);
+                    if (index === pathParts.length - 1) {
+                        breadcrumbItem.classList.add('active');
+                    }
+                    breadcrumbContainer.appendChild(breadcrumbItem);
+                });
+            }
+        }
+
+        async function downloadItem(itemName) {
+            showMessage(`Iniciando download: ${itemName}...`, 'info');
+            const params = {
+                Bucket: bucketConfig.bucketName,
+                Key: itemName,
+                Expires: 60 // URL expira em 60 segundos
+            };
+
+            try {
+                const url = await s3.getSignedUrlPromise('getObject', params);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = itemName.split('/').pop(); // Extrai o nome do arquivo da chave
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showMessage(`Download iniciado: ${itemName}`, 'success');
+            } catch (err) {
+                console.error("Erro ao gerar URL de download:", err);
+                showMessage(`Erro ao iniciar download: ${err.message}`, 'error');
+            }
+        }
+
+        function performSearch() {
+            const searchTerm = searchInput.value.toLowerCase();
+            if (searchTerm === '') {
+                filteredContents = [...bucketContents];
+            } else {
+                filteredContents = bucketContents.filter(item =>
+                    item.name.toLowerCase().includes(searchTerm)
+                );
+            }
+            displayContents(filteredContents);
+        }
+
+        // Event listeners
+        clientSelect.addEventListener('change', function (e) {
+            currentClient = e.target.value;
+            currentPath = ''; // Reset path when client changes
+            if (currentClient) {
+                loadBucketContents();
+                updateBreadcrumb();
+            } else {
+                contentContainer.innerHTML = '';
+                bucketContents = [];
+                filteredContents = [];
+                showMessage('Selecione um cliente para começar a navegar pelo bucket.', 'info');
+            }
+        });
+
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function () {
+            // Set the clientSelect value to 'backupteste' and trigger load
+            clientSelect.value = 'backupteste'; // Ensure this matches the correct bucket name from bucketConfig
+            loadBucketContents();
+            updateBreadcrumb();
+        });
+    </script>
+</body>
+
+</html>
